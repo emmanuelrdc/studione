@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-const SITE_URL = 'https://studioone-hazel.vercel.app'
+const SITE_URL = 'https://studione.vercel.app'
 
 export const defaultMetadata: Metadata = {
   metadataBase: new URL(SITE_URL),
