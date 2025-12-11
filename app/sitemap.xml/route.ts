@@ -7,8 +7,8 @@ interface PageEntry {
 }
 
 export async function GET(request: Request) {
-  // Use the request origin so sitemap works for any deployment domain
-  const origin = new URL(request.url).origin
+  // Prefer a configured canonical site URL (set NEXT_PUBLIC_SITE_URL in Vercel env)
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
 
   const pages: PageEntry[] = [
     { path: '/', changefreq: 'weekly', priority: 1.0 },
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     pages
       .map((page) => {
-        const url = `${origin}${page.path}`
+        const url = `${origin.replace(/\/$/, '')}${page.path}`
         return `  <url>\n    <loc>${url}</loc>\n    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority}</priority>\n  </url>`
       })
       .join('\n') +
