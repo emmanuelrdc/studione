@@ -1,28 +1,29 @@
 import { NextResponse } from 'next/server'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://studioone-hazel.vercel.app'
-
 interface PageEntry {
   path: string
   changefreq: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
   priority: number
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Use the request origin so sitemap works for any deployment domain
+  const origin = new URL(request.url).origin
+
   const pages: PageEntry[] = [
     { path: '/', changefreq: 'weekly', priority: 1.0 },
     { path: '/place', changefreq: 'monthly', priority: 0.8 },
   ]
 
-  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-    ${pages
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    pages
       .map((page) => {
-        const url = `${SITE_URL}${page.path}`
-        return `<url><loc>${url}</loc><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`
+        const url = `${origin}${page.path}`
+        return `  <url>\n    <loc>${url}</loc>\n    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority}</priority>\n  </url>`
       })
-      .join('\n')}
-  </urlset>`
+      .join('\n') +
+    `\n</urlset>`
 
   return new NextResponse(sitemap, {
     headers: {

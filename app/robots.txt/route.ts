@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://studioone-hazel.vercel.app'
+export async function GET(request: Request) {
+  const origin = new URL(request.url).origin
 
-export async function GET() {
-  const robots = `User-agent: *
-Disallow:
-
-Sitemap: ${SITE_URL}/sitemap.xml
-Host: ${SITE_URL}
-`
+  const robots = `User-agent: *\nDisallow:\n\nSitemap: ${origin}/sitemap.xml\n`
 
   return new NextResponse(robots, {
     headers: {
