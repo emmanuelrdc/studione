@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 
-export async function GET(request: Request) {
-  const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
+export async function GET() {
+  const SITE_URL = 'https://studione.vercel.app'
 
-  const robots = `User-agent: *\nDisallow:\n\nSitemap: ${origin.replace(/\/$/, '')}/sitemap.xml\n`
+  const robots = `User-agent: *
+Disallow:
+
+Sitemap: ${SITE_URL}/sitemap.xml
+`
 
   return new NextResponse(robots, {
     headers: {
-      'Content-Type': 'text/plain',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
     },
   })
 }

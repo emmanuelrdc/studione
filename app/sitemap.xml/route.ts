@@ -6,9 +6,9 @@ interface PageEntry {
   priority: number
 }
 
-export async function GET(request: Request) {
-  // Prefer a configured canonical site URL (set NEXT_PUBLIC_SITE_URL in Vercel env)
-  const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
+export async function GET() {
+  // Force canonical URL for this deployment
+  const SITE_URL = 'https://studione.vercel.app'
 
   const pages: PageEntry[] = [
     { path: '/', changefreq: 'weekly', priority: 1.0 },
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const sitemapEntries = pages
     .map((page) => {
-      const url = `${origin.replace(/\/$/, '')}${page.path}`
+      const url = `${SITE_URL}${page.path}`
       return `  <url>
     <loc>${url}</loc>
     <changefreq>${page.changefreq}</changefreq>
@@ -34,6 +34,7 @@ ${sitemapEntries}
   return new NextResponse(sitemap, {
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
     },
   })
 }
