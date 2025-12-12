@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+
 export default function Contact() {
   const whatsappNumber = "524871077025";
   const whatsappMessage = encodeURIComponent(
@@ -5,6 +9,28 @@ export default function Contact() {
   );
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
   const phoneNumber = "4878720060";
+
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    reason: ''
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Aquí puedes agregar lógica para enviar el formulario, por ejemplo, a un servidor o email
+    alert('Formulario enviado: ' + JSON.stringify(formData, null, 2));
+    // Reset form
+    setFormData({ name: '', phone: '', email: '', reason: '' });
+  };
 
   return (
     <section id="contacto" className="bg-gray-50 py-24 px-4 sm:px-6 lg:px-8">
@@ -36,6 +62,75 @@ export default function Contact() {
                 {phoneNumber}
               </a>
             </p>
+          </div>
+
+          {/* Formulario de contacto */}
+          <div className="bg-white p-8 rounded-lg shadow-md">
+            <h3 className="text-2xl font-light text-gray-900 mb-6">Envíanos un mensaje</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                  Teléfono
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Correo
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="reason" className="block text-sm font-medium text-gray-700">
+                  Motivo
+                </label>
+                <textarea
+                  id="reason"
+                  name="reason"
+                  value={formData.reason}
+                  onChange={handleChange}
+                  required
+                  rows={4}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              >
+                Enviar
+              </button>
+            </form>
           </div>
 
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">

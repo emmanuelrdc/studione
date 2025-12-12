@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { defaultMetadata } from "@/lib/seo-metadata";
 import "./globals.css";
@@ -9,20 +9,22 @@ const inter = Inter({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://studione.vercel.app';
+
 export const metadata: Metadata = {
   ...defaultMetadata,
   alternates: {
-    canonical: 'https://studioone-hazel.vercel.app',
+    canonical: SITE_URL,
   },
   openGraph: {
     title: "Studio One | Estética profesional",
     description:
       "Más de 39 años de experiencia en belleza, maquillaje, peinados y cuidado del cabello.",
-    url: "https://studioone-hazel.vercel.app",
+    url: SITE_URL,
     siteName: "Studio One",
     images: [
       {
-        url: "https://studioone-hazel.vercel.app/og-image.jpg",
+        url: `${SITE_URL}/og-image.jpg`,
         width: 1200,
         height: 630,
         alt: "Studio One Estética",
@@ -36,8 +38,25 @@ export const metadata: Metadata = {
     title: "Studio One | Estética profesional",
     description:
       "Más de 39 años de experiencia en belleza, maquillaje, peinados y cuidado del cabello.",
-    images: ["https://studioone-hazel.vercel.app/og-image.jpg"],
+    images: [`${SITE_URL}/og-image.jpg`],
   },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -58,13 +77,13 @@ export default function RootLayout({
               name: 'Studio One',
               description:
                 'Estética en Río Verde, San Luis Potosí. Servicios de maquillaje, peinados, faciales, tintes, cortes y venta de cosméticos.',
-              url: 'https://studioone-hazel.vercel.app',
-              logo: 'https://studioone-hazel.vercel.app/og-image.jpg',
-              image: ['https://studioone-hazel.vercel.app/og-image.jpg'],
+              url: SITE_URL,
+              logo: `${SITE_URL}/og-image.jpg`,
+              image: [`${SITE_URL}/og-image.jpg`],
               telephone: '+524878720060',
               address: {
                 '@type': 'PostalAddress',
-                streetAddress: 'Gabriel Martínez 111, Zona Centro',
+                streetAddress: 'Gabriel Martínez Interior 2',
                 addressLocality: 'Río Verde',
                 addressRegion: 'San Luis Potosí',
                 addressCountry: 'MX'
