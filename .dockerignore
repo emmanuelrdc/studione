@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+studione.db
+studione.db-shm
+studione.db-wal
+.env.local
+*.log
