@@ -16,7 +16,7 @@ export default function BackgroundSlideshow() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
-    }, 6000);
+    }, 7000);
     return () => clearInterval(interval);
   }, [images.length]);
 
@@ -29,18 +29,18 @@ export default function BackgroundSlideshow() {
       {images.map((image, index) => (
         <div
           key={index}
-          className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${
+          className={`absolute inset-0 transition-opacity duration-[2500ms] ease-in-out ${
             index === currentIndex ? "opacity-100" : "opacity-0"
           }`}
           style={{
-            animation: index === currentIndex ? "kenBurns 12s ease-in-out infinite alternate" : "none",
+            animation: index === currentIndex ? "kenBurns 14s ease-in-out infinite alternate" : "none",
           }}
         >
           <Image
             src={image}
             alt={`Studio One ${index + 1}`}
             fill
-            className="object-cover scale-110"
+            className="object-cover scale-105"
             priority={index === 0}
             unoptimized
             onError={(e) => {
@@ -52,7 +52,7 @@ export default function BackgroundSlideshow() {
       <style jsx>{`
         @keyframes kenBurns {
           0% { transform: scale(1) translateX(0); }
-          100% { transform: scale(1.08) translateX(-1%); }
+          100% { transform: scale(1.05) translateX(-0.5%); }
         }
       `}</style>
     </div>

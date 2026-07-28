@@ -2,15 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import BackgroundSlideshow from "./background-slideshow";
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 24 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: 0.4 + i * 0.15, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] as const },
+    transition: { delay: 0.5 + i * 0.12, duration: 0.7, ease: [0.22, 1, 0.36, 1] as const },
   }),
 };
 
@@ -29,19 +29,25 @@ export default function Hero() {
       {/* Background */}
       <BackgroundSlideshow />
 
-      {/* Dark overlay for contrast */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
+      {/* Base overlay — keeps text legible over any (even bright, daytime) slide */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/45 to-black/85" />
+
+      {/* Radial scrim centered behind the content for guaranteed contrast */}
+      <div className="absolute inset-0 [background:radial-gradient(ellipse_65%_55%_at_50%_46%,rgba(0,0,0,0.5),transparent_72%)]" />
+
+      {/* Subtle top vignette anchors the navbar */}
+      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/50 to-transparent" />
 
       {/* Content */}
-      <div className="relative z-10 mx-auto max-w-5xl px-6 py-32 text-center">
+      <div className="relative z-10 mx-auto max-w-5xl px-6 py-20 sm:py-28 md:py-32 text-center">
         {/* Logo */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
+          initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="mb-10 flex justify-center"
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-8 flex justify-center sm:mb-12"
         >
-          <div className="relative h-28 w-28 sm:h-36 sm:w-36 overflow-hidden rounded-[28px] shadow-2xl ring-1 ring-white/20">
+          <div className="relative h-24 w-24 sm:h-28 sm:w-28 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10">
             <Image
               src="/logo.jpg"
               alt="Studio One Logo"
@@ -58,10 +64,18 @@ export default function Hero() {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="mb-4 text-5xl font-semibold tracking-tight text-white sm:text-7xl lg:text-8xl"
+          className="mb-5 text-5xl font-light tracking-[-0.02em] text-white sm:text-7xl lg:text-8xl"
         >
           Studio One
         </motion.h1>
+
+        {/* Decorative line */}
+        <motion.div
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ delay: 0.8, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="mx-auto mb-6 h-px w-16 origin-center bg-gradient-to-r from-transparent via-white/50 to-transparent"
+        />
 
         {/* Subtitle */}
         <motion.p
@@ -69,7 +83,7 @@ export default function Hero() {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="mb-3 text-lg font-light tracking-wide text-white/70 sm:text-xl"
+          className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-white/70 sm:text-base"
         >
           Estética Profesional
         </motion.p>
@@ -80,7 +94,7 @@ export default function Hero() {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="mx-auto mb-12 max-w-xl text-base leading-relaxed text-white/50 sm:text-lg"
+          className="mx-auto mb-10 max-w-lg text-base leading-relaxed text-white/75 sm:mb-14 sm:text-lg"
         >
           Más de 39 años transformando tu imagen con las últimas tendencias en belleza y cuidado personal.
         </motion.p>
@@ -97,10 +111,10 @@ export default function Hero() {
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex items-center justify-center gap-2.5 rounded-full bg-primary-400 px-8 py-3.5 text-sm font-medium text-neutral-900 transition-all duration-300 hover:bg-primary-300 hover:shadow-[0_0_30px_rgba(154,205,50,0.25)] active:scale-[0.98]"
+            className="group inline-flex items-center justify-center gap-2.5 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-neutral-900 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.5)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_16px_40px_-8px_rgba(255,255,255,0.25)] active:translate-y-0 active:scale-[0.98]"
           >
             <svg
-              className="h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110"
+              className="h-4 w-4 transition-transform duration-300 group-hover:scale-110"
               fill="currentColor"
               viewBox="0 0 24 24"
             >
@@ -110,10 +124,10 @@ export default function Hero() {
           </Link>
           <Link
             href="#servicios"
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/25 px-8 py-3.5 text-sm font-medium text-white/90 backdrop-blur-sm transition-all duration-300 hover:border-white/40 hover:bg-white/10 active:scale-[0.98]"
+            className="group inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-8 py-3.5 text-sm font-medium text-white/70 transition-all duration-300 hover:border-white/30 hover:text-white active:scale-[0.98]"
           >
             Explorar Servicios
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </Link>
@@ -124,15 +138,19 @@ export default function Hero() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 2, duration: 1 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
+        transition={{ delay: 2.2, duration: 1 }}
+        className="absolute bottom-10 left-1/2 -translate-x-1/2"
       >
         <motion.div
-          animate={{ y: [0, 8, 0] }}
-          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-          className="flex h-9 w-5 items-start justify-center rounded-full border border-white/20 p-1.5"
+          animate={{ y: [0, 6, 0] }}
+          transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+          className="flex h-8 w-[18px] items-start justify-center rounded-full border border-white/15 p-1.5"
         >
-          <div className="h-1.5 w-1 rounded-full bg-white/50" />
+          <motion.div
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+            className="h-1.5 w-0.5 rounded-full bg-white/60"
+          />
         </motion.div>
       </motion.div>
     </section>

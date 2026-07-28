@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { validateId, sanitizeString } from "@/lib/validation";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +28,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   const { id: rawId } = await params;
@@ -70,6 +72,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     updateService();
 
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "service.update",
+      entityType: "service",
+      entityId: id,
+      details: { changed: Object.keys(body).filter((k) => k !== "products") },
+      ...auditContext(request),
+    });
+
     const updated = db.prepare("SELECT * FROM services WHERE id = ?").get(id);
     const serviceProducts = db.prepare(
       "SELECT sp.*, p.name as product_name FROM service_products sp JOIN products p ON sp.product_id = p.id WHERE sp.service_id = ?"
@@ -81,10 +92,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   const { id: rawId } = await params;
@@ -93,5 +105,12 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   const db = getDb();
   db.prepare("UPDATE services SET active = 0 WHERE id = ?").run(id);
+  writeAudit({
+    actor: actorFromSession(session),
+    action: "service.delete",
+    entityType: "service",
+    entityId: id,
+    ...auditContext(request),
+  });
   return NextResponse.json({ success: true });
 }

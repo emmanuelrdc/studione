@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { validateId, sanitizeString } from "@/lib/validation";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   const { id: rawId } = await params;
@@ -31,6 +33,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     db.prepare(`UPDATE brands SET ${fields.join(", ")} WHERE id = ?`).run(...values);
 
     const updated = db.prepare("SELECT * FROM brands WHERE id = ?").get(id);
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "brand.update",
+      entityType: "brand",
+      entityId: id,
+      details: { changed: fields.map((f) => f.split(" ")[0]) },
+      ...auditContext(request),
+    });
     return NextResponse.json(updated);
   } catch (error) {
     console.error("PUT /api/brands/[id] error:", error);
@@ -38,10 +48,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   const { id: rawId } = await params;
@@ -50,5 +61,12 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   const db = getDb();
   db.prepare("UPDATE brands SET active = 0 WHERE id = ?").run(id);
+  writeAudit({
+    actor: actorFromSession(session),
+    action: "brand.delete",
+    entityType: "brand",
+    entityId: id,
+    ...auditContext(request),
+  });
   return NextResponse.json({ success: true });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { checkAndCreateNotifications } from "@/lib/notifications";
 import { isNonEmptyString, isNonNegativeNumber, sanitizeString } from "@/lib/validation";
 
@@ -28,7 +29,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   try {
@@ -63,6 +65,15 @@ export async function POST(request: NextRequest) {
 
     const product = db.prepare("SELECT * FROM products WHERE id = ?").get(result.lastInsertRowid) as { id: number; name: string; stock_sales: number; stock_internal: number; product_type: string };
     checkAndCreateNotifications(product);
+
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "product.create",
+      entityType: "product",
+      entityId: Number(result.lastInsertRowid),
+      details: { name: safeName, price },
+      ...auditContext(request),
+    });
 
     return NextResponse.json({ id: result.lastInsertRowid, ...body }, { status: 201 });
   } catch (error) {

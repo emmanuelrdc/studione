@@ -9,6 +9,20 @@ interface Brand { id: number; name: string; description: string | null; }
 
 const emptyProduct = { name: "", description: "", brand_id: 0, stock_sales: 0, stock_internal: 0, price: 0, cost: 0, category_id: 0, image: "", product_type: "both" };
 
+function ErrorBanner({ message, onClose }: { message: string; onClose: () => void }) {
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-3 backdrop-blur-xl shadow-lg">
+      <svg className="h-4 w-4 shrink-0 text-red-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+      </svg>
+      <p className="text-sm text-red-300">{message}</p>
+      <button onClick={onClose} className="ml-2 text-red-400/50 hover:text-red-400 transition-colors">
+        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+  );
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -26,30 +40,60 @@ export default function ProductsPage() {
   const [showBrandForm, setShowBrandForm] = useState(false);
   const [brandForm, setBrandForm] = useState({ name: "", description: "" });
   const [savingBrand, setSavingBrand] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Stock adjustment modal state
+  const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
+  const [adjustType, setAdjustType] = useState<"in" | "out">("in");
+  const [adjustStockType, setAdjustStockType] = useState<"sales" | "internal">("sales");
+  const [adjustQty, setAdjustQty] = useState(1);
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 6000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   const load = useCallback(async () => {
     const [p, c, b] = await Promise.all([fetch("/api/products"), fetch("/api/categories?type=product"), fetch("/api/brands")]);
-    setProducts(await p.json());
-    setCategories(await c.json());
-    setBrands(await b.json());
+    if (p.ok) setProducts(await p.json());
+    if (c.ok) setCategories(await c.json());
+    if (b.ok) setBrands(await b.json());
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleSave = async () => {
-    if (!form.name || !form.price) return;
+    if (!form.name.trim()) { setError("El nombre del producto es requerido"); return; }
+    if (!form.price || form.price < 0) { setError("El precio debe ser mayor o igual a 0"); return; }
     setSaving(true);
     try {
       const url = editing ? `/api/products/${editing.id}` : "/api/products";
       const method = editing ? "PUT" : "POST";
-      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-      setShowForm(false);
-      setEditing(null);
-      setForm(emptyProduct);
-      setImagePreview(null);
-      load();
-    } finally { setSaving(false); }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          stock_sales: Math.max(0, Math.floor(form.stock_sales || 0)),
+          stock_internal: Math.max(0, Math.floor(form.stock_internal || 0)),
+        }),
+      });
+      if (res.ok) {
+        setShowForm(false);
+        setEditing(null);
+        setForm(emptyProduct);
+        setImagePreview(null);
+        load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Error al guardar el producto");
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,19 +108,41 @@ export default function ProductsPage() {
       if (res.ok && data.url) {
         setForm(prev => ({ ...prev, image: data.url }));
         setImagePreview(data.url);
+      } else {
+        setError(data.error || "Error al subir la imagen");
       }
-    } finally { setUploading(false); }
+    } catch {
+      setError("Error al subir la imagen");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Desactivar este producto?")) return;
-    await fetch(`/api/products/${id}`, { method: "DELETE" });
-    load();
+    if (!confirm("¿Desactivar este producto? Seguirá en el historial de ventas.")) return;
+    const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Error al desactivar el producto");
+    }
   };
 
   const openEdit = (p: Product) => {
     setEditing(p);
-    setForm({ name: p.name, description: p.description || "", brand_id: p.brand_id || 0, stock_sales: p.stock_sales, stock_internal: p.stock_internal, price: p.price, cost: p.cost, category_id: p.category_id || 0, image: p.image || "", product_type: p.product_type || "both" });
+    setForm({
+      name: p.name,
+      description: p.description || "",
+      brand_id: p.brand_id || 0,
+      stock_sales: p.stock_sales,
+      stock_internal: p.stock_internal,
+      price: p.price,
+      cost: p.cost,
+      category_id: p.category_id || 0,
+      image: p.image || "",
+      product_type: p.product_type || "both",
+    });
     setImagePreview(p.image || null);
     setShowBrandForm(false);
     setShowForm(true);
@@ -86,34 +152,87 @@ export default function ProductsPage() {
     if (!brandForm.name.trim()) return;
     setSavingBrand(true);
     try {
-      const res = await fetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(brandForm) });
+      const res = await fetch("/api/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(brandForm),
+      });
       if (res.ok) {
         const newBrand = await res.json();
         const bRes = await fetch("/api/brands");
-        setBrands(await bRes.json());
+        if (bRes.ok) setBrands(await bRes.json());
         setForm(prev => ({ ...prev, brand_id: newBrand.id }));
         setBrandForm({ name: "", description: "" });
         setShowBrandForm(false);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Error al crear la marca");
       }
-    } finally { setSavingBrand(false); }
+    } finally {
+      setSavingBrand(false);
+    }
   };
 
   const handleTransfer = async () => {
     if (!transferProduct || transferAmount <= 0) return;
-    await fetch(`/api/products/${transferProduct.id}`, {
+    const maxAvailable = transferTo === "internal" ? transferProduct.stock_sales : transferProduct.stock_internal;
+    if (transferAmount > maxAvailable) {
+      setError(`Stock insuficiente — disponible: ${maxAvailable}`);
+      return;
+    }
+    const res = await fetch(`/api/products/${transferProduct.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ transfer_to: transferTo, transfer_amount: transferAmount }),
     });
-    setTransferProduct(null);
-    setTransferAmount(1);
-    load();
+    if (res.ok) {
+      setTransferProduct(null);
+      setTransferAmount(1);
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Error al transferir stock");
+    }
   };
 
-  const filtered = products.filter(p => p.active && (p.name.toLowerCase().includes(search.toLowerCase()) || p.brand_name?.toLowerCase().includes(search.toLowerCase())));
+  const openAdjust = (p: Product) => {
+    setAdjustProduct(p);
+    setAdjustType("in");
+    setAdjustStockType(p.product_type === "internal" ? "internal" : "sales");
+    setAdjustQty(1);
+    setAdjustReason("");
+  };
+
+  const handleAdjust = async () => {
+    if (!adjustProduct || adjustQty <= 0) return;
+    setAdjusting(true);
+    try {
+      const res = await fetch(`/api/products/${adjustProduct.id}/adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: adjustType, stock_type: adjustStockType, quantity: adjustQty, reason: adjustReason.trim() || null }),
+      });
+      if (res.ok) {
+        setAdjustProduct(null);
+        load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Error al ajustar stock");
+      }
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
+  const filtered = products.filter(p =>
+    p.active &&
+    (p.name.toLowerCase().includes(search.toLowerCase()) || p.brand_name?.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <div className="p-5 lg:p-8 space-y-6">
+      {error && <ErrorBanner message={error} onClose={() => setError(null)} />}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white/90 tracking-tight">Productos</h1>
@@ -190,9 +309,12 @@ export default function ProductsPage() {
                   <td className="px-5 py-3.5 text-right text-white/40">${p.cost.toFixed(2)}</td>
                   <td className="px-5 py-3.5 text-right font-medium text-white/80">${p.price.toFixed(2)}</td>
                   <td className="px-5 py-3.5 text-right">
-                    {p.product_type === "both" && <button onClick={() => { setTransferProduct(p); setTransferTo("internal"); setTransferAmount(1); }} className="mr-1 rounded-lg px-2 py-1 text-xs text-primary-400 hover:bg-primary-500/10">Transferir</button>}
-                    <button onClick={() => openEdit(p)} className="mr-1 rounded-lg px-2 py-1 text-xs text-accent-400 hover:bg-accent-500/10">Editar</button>
-                    <button onClick={() => handleDelete(p.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-500/10">Eliminar</button>
+                    <button onClick={() => openAdjust(p)} className="mr-1 rounded-lg px-2 py-1 text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors" title="Ajustar stock">Ajustar</button>
+                    {p.product_type === "both" && (
+                      <button onClick={() => { setTransferProduct(p); setTransferTo("internal"); setTransferAmount(1); }} className="mr-1 rounded-lg px-2 py-1 text-xs text-primary-400 hover:bg-primary-500/10 transition-colors">Transferir</button>
+                    )}
+                    <button onClick={() => openEdit(p)} className="mr-1 rounded-lg px-2 py-1 text-xs text-accent-400 hover:bg-accent-500/10 transition-colors">Editar</button>
+                    <button onClick={() => handleDelete(p.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">Eliminar</button>
                   </td>
                 </tr>
               ))}
@@ -221,7 +343,7 @@ export default function ProductsPage() {
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto px-7 pb-2 space-y-5">
-              {/* Image Upload — prominent area */}
+              {/* Image Upload */}
               <div className="flex items-center gap-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
                 {imagePreview ? (
                   <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/[0.08]">
@@ -245,7 +367,7 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Product info section */}
+              {/* Product info */}
               <div className="space-y-3.5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25">Información</p>
                 <div>
@@ -260,9 +382,7 @@ export default function ProductsPage() {
                         <option value={0}>Sin marca</option>
                         {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
-                      <button type="button" onClick={() => setShowBrandForm(!showBrandForm)} className={`shrink-0 rounded-xl border px-3 py-2.5 text-sm transition-all ${showBrandForm ? "border-accent-400/30 bg-accent-500/10 text-accent-400" : "border-white/[0.08] bg-white/[0.04] text-white/40 hover:text-white/60"}`} title="Nueva marca">
-                        +
-                      </button>
+                      <button type="button" onClick={() => setShowBrandForm(!showBrandForm)} className={`shrink-0 rounded-xl border px-3 py-2.5 text-sm transition-all ${showBrandForm ? "border-accent-400/30 bg-accent-500/10 text-accent-400" : "border-white/[0.08] bg-white/[0.04] text-white/40 hover:text-white/60"}`} title="Nueva marca">+</button>
                     </div>
                     {showBrandForm && (
                       <div className="mt-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
@@ -288,7 +408,7 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Pricing section */}
+              {/* Pricing */}
               <div className="space-y-3.5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25">Precio</p>
                 <div className="grid gap-3.5 sm:grid-cols-2">
@@ -296,24 +416,22 @@ export default function ProductsPage() {
                     <label className="mb-1.5 block text-xs font-medium text-white/40">Precio de venta <span className="text-primary-400/60">*</span></label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-white/25">$</span>
-                      <input type="number" step="0.01" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="0.00" className="glass-input w-full pl-7 pr-4 py-2.5 text-sm" />
+                      <input type="number" step="0.01" min="0" value={form.price || ""} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} placeholder="0.00" className="glass-input w-full pl-7 pr-4 py-2.5 text-sm" />
                     </div>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-white/40">Costo</label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-white/25">$</span>
-                      <input type="number" step="0.01" value={form.cost || ""} onChange={(e) => setForm({ ...form, cost: parseFloat(e.target.value) || 0 })} placeholder="0.00" className="glass-input w-full pl-7 pr-4 py-2.5 text-sm" />
+                      <input type="number" step="0.01" min="0" value={form.cost || ""} onChange={(e) => setForm({ ...form, cost: parseFloat(e.target.value) || 0 })} placeholder="0.00" className="glass-input w-full pl-7 pr-4 py-2.5 text-sm" />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Stock section */}
+              {/* Inventory */}
               <div className="space-y-3.5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25">Inventario</p>
-
-                {/* Product type segmented control */}
                 <div>
                   <label className="mb-2 block text-xs font-medium text-white/40">Tipo de producto</label>
                   <div className="flex rounded-xl border border-white/[0.08] bg-white/[0.03] p-1">
@@ -322,50 +440,173 @@ export default function ProductsPage() {
                       { value: "internal", label: "Consumo Interno", icon: "🧴" },
                       { value: "both", label: "Ambos", icon: "📦" },
                     ] as const).map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
+                      <button key={opt.value} type="button"
                         onClick={() => {
                           const updates: Partial<typeof form> = { product_type: opt.value };
                           if (opt.value === "sell") updates.stock_internal = 0;
                           if (opt.value === "internal") updates.stock_sales = 0;
                           setForm(prev => ({ ...prev, ...updates }));
                         }}
-                        className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-                          form.product_type === opt.value
-                            ? "bg-white/[0.1] text-white shadow-sm"
-                            : "text-white/35 hover:text-white/55"
-                        }`}
+                        className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${form.product_type === opt.value ? "bg-white/[0.1] text-white shadow-sm" : "text-white/35 hover:text-white/55"}`}
                       >
                         <span className="mr-1">{opt.icon}</span>{opt.label}
                       </button>
                     ))}
                   </div>
                 </div>
-
                 <div className="grid gap-3.5 sm:grid-cols-2">
                   {(form.product_type === "sell" || form.product_type === "both") && (
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-white/40">Stock Ventas</label>
-                      <input type="number" value={form.stock_sales || ""} onChange={(e) => setForm({ ...form, stock_sales: parseInt(e.target.value) || 0 })} placeholder="0" className="glass-input w-full px-4 py-2.5 text-sm" />
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={form.stock_sales === 0 ? "" : form.stock_sales}
+                        onChange={(e) => setForm({ ...form, stock_sales: Math.max(0, Math.floor(parseInt(e.target.value) || 0)) })}
+                        placeholder="0"
+                        className="glass-input w-full px-4 py-2.5 text-sm"
+                      />
                     </div>
                   )}
                   {(form.product_type === "internal" || form.product_type === "both") && (
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-white/40">Stock Interno</label>
-                      <input type="number" value={form.stock_internal || ""} onChange={(e) => setForm({ ...form, stock_internal: parseInt(e.target.value) || 0 })} placeholder="0" className="glass-input w-full px-4 py-2.5 text-sm" />
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={form.stock_internal === 0 ? "" : form.stock_internal}
+                        onChange={(e) => setForm({ ...form, stock_internal: Math.max(0, Math.floor(parseInt(e.target.value) || 0)) })}
+                        placeholder="0"
+                        className="glass-input w-full px-4 py-2.5 text-sm"
+                      />
                     </div>
                   )}
                 </div>
+                {editing && (
+                  <p className="text-[10px] text-white/25">Para ajustes de stock sin modificar el producto completo, usa el botón <span className="text-emerald-400/70">Ajustar</span> en la tabla.</p>
+                )}
               </div>
             </div>
 
-            {/* Footer buttons — sticky */}
+            {/* Footer */}
             <div className="border-t border-white/[0.06] px-7 py-5 flex gap-3">
               <button onClick={() => { setShowForm(false); setEditing(null); }} className="flex-1 btn-secondary py-3 text-sm">Cancelar</button>
-              <button onClick={handleSave} disabled={saving || !form.name || !form.price} className="flex-1 btn-primary py-3 text-sm">
+              <button onClick={handleSave} disabled={saving || !form.name.trim() || form.price < 0} className="flex-1 btn-primary py-3 text-sm">
                 {saving ? "Guardando..." : "Guardar"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stock Adjustment Modal */}
+      {adjustProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4" onClick={() => setAdjustProduct(null)}>
+          <div className="w-full max-w-sm glass-modal animate-modal flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-white">Ajuste de Stock</h2>
+                  <p className="mt-0.5 text-xs text-white/30 max-w-[220px] truncate">{adjustProduct.name}</p>
+                </div>
+                <button onClick={() => setAdjustProduct(null)} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.06] text-white/40 hover:bg-white/[0.1] hover:text-white/70">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Current stock */}
+            <div className="mx-7 mb-4 grid grid-cols-2 gap-3 rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
+              {(adjustProduct.product_type === "sell" || adjustProduct.product_type === "both") && (
+                <div className="text-center">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider">Ventas</p>
+                  <p className={`text-lg font-bold mt-0.5 ${adjustProduct.stock_sales <= 2 ? "text-red-400" : "text-primary-400"}`}>{adjustProduct.stock_sales}</p>
+                </div>
+              )}
+              {(adjustProduct.product_type === "internal" || adjustProduct.product_type === "both") && (
+                <div className="text-center">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider">Interno</p>
+                  <p className={`text-lg font-bold mt-0.5 ${adjustProduct.stock_internal <= 2 ? "text-red-400" : "text-accent-400"}`}>{adjustProduct.stock_internal}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-7 pb-2 space-y-4">
+              {/* Stock type (only shown if product_type === "both") */}
+              {adjustProduct.product_type === "both" && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/40">Stock a ajustar</label>
+                  <div className="flex gap-2">
+                    <button onClick={() => setAdjustStockType("sales")} className={`flex-1 rounded-lg border py-2 text-xs font-medium transition-all ${adjustStockType === "sales" ? "border-primary-500/30 bg-primary-500/10 text-primary-400" : "border-white/[0.06] text-white/30 hover:text-white/50"}`}>
+                      Ventas
+                    </button>
+                    <button onClick={() => setAdjustStockType("internal")} className={`flex-1 rounded-lg border py-2 text-xs font-medium transition-all ${adjustStockType === "internal" ? "border-accent-500/30 bg-accent-500/10 text-accent-400" : "border-white/[0.06] text-white/30 hover:text-white/50"}`}>
+                      Interno
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Type: entrada / salida */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-white/40">Tipo de movimiento</label>
+                <div className="flex gap-2">
+                  <button onClick={() => setAdjustType("in")} className={`flex-1 rounded-lg border py-2 text-xs font-medium transition-all ${adjustType === "in" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-white/[0.06] text-white/30 hover:text-white/50"}`}>
+                    + Entrada
+                  </button>
+                  <button onClick={() => setAdjustType("out")} className={`flex-1 rounded-lg border py-2 text-xs font-medium transition-all ${adjustType === "out" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-white/[0.06] text-white/30 hover:text-white/50"}`}>
+                    − Salida
+                  </button>
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-white/40">
+                  Cantidad
+                  {adjustType === "out" && (
+                    <span className="ml-2 text-white/20">
+                      (máx. {adjustStockType === "sales" ? adjustProduct.stock_sales : adjustProduct.stock_internal})
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  max={adjustType === "out" ? (adjustStockType === "sales" ? adjustProduct.stock_sales : adjustProduct.stock_internal) : undefined}
+                  value={adjustQty}
+                  onChange={(e) => setAdjustQty(Math.max(1, Math.floor(parseInt(e.target.value) || 1)))}
+                  className="glass-input w-full px-4 py-2.5 text-sm"
+                  autoFocus
+                />
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-white/40">Motivo <span className="text-white/20">(opcional)</span></label>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  placeholder="Ej: Inventario físico, merma, recepción..."
+                  maxLength={500}
+                  className="glass-input w-full px-4 py-2.5 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-white/[0.06] px-7 py-5 flex gap-3 mt-2">
+              <button onClick={() => setAdjustProduct(null)} className="flex-1 btn-secondary py-3 text-sm">Cancelar</button>
+              <button
+                onClick={handleAdjust}
+                disabled={adjusting || adjustQty <= 0}
+                className={`flex-1 py-3 text-sm font-medium rounded-lg transition-all disabled:opacity-30 disabled:pointer-events-none ${adjustType === "in" ? "bg-emerald-500 hover:bg-emerald-600 text-white" : "bg-red-500/80 hover:bg-red-500 text-white"}`}
+              >
+                {adjusting ? "Aplicando..." : adjustType === "in" ? `+ Agregar ${adjustQty}` : `− Retirar ${adjustQty}`}
+            </button>
             </div>
           </div>
         </div>
@@ -396,8 +637,18 @@ export default function ProductsPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs text-white/40 uppercase tracking-wider">Cantidad</label>
-                <input type="number" min={1} max={transferTo === "internal" ? transferProduct.stock_sales : transferProduct.stock_internal} value={transferAmount} onChange={(e) => setTransferAmount(parseInt(e.target.value) || 0)} className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white outline-none focus:border-white/20" />
+                <label className="mb-1.5 block text-xs text-white/40 uppercase tracking-wider">
+                  Cantidad <span className="text-white/20">(máx. {transferTo === "internal" ? transferProduct.stock_sales : transferProduct.stock_internal})</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  max={transferTo === "internal" ? transferProduct.stock_sales : transferProduct.stock_internal}
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(Math.max(1, Math.floor(parseInt(e.target.value) || 1)))}
+                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white outline-none focus:border-white/20"
+                />
               </div>
             </div>
             <div className="mt-6 flex gap-3">

@@ -6,7 +6,19 @@ interface Appointment { id: number; client_name: string; client_phone: string; c
 interface Service { id: number; name: string; price: number; duration: number; category_name?: string; }
 interface Client { id: number; name: string; phone: string | null; }
 
-const HOURS = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, "0")}:00`);
+const ALL_TIMES = Array.from({ length: 25 }, (_, i) => {
+  const h = Math.floor(i / 2) + 8;
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${h.toString().padStart(2, "0")}:${m}`;
+});
+
+function formatTime12(t: string) {
+  const [hStr, m] = t.split(":");
+  const h = parseInt(hStr);
+  const suffix = h >= 12 ? "pm" : "am";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${m} ${suffix}`;
+}
 
 export default function CalendarPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -19,6 +31,8 @@ export default function CalendarPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientSearch, setClientSearch] = useState("");
   const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -60,11 +74,26 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
+  const availableTimes = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (form.date !== todayStr) return ALL_TIMES;
+    const now = new Date();
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    // Round up to next 30-min slot
+    const nextSlot = Math.ceil(currentMin / 30) * 30;
+    return ALL_TIMES.filter(t => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m >= nextSlot;
+    });
+  }, [form.date]);
+
   const openNew = (date?: string) => {
     setEditing(null);
     setForm({ client_name: "", client_phone: "", service_id: "", date: date || selectedDate, time: "10:00", notes: "", client_id: "" });
     setClientSearch("");
     setShowClientDropdown(false);
+    setServiceSearch("");
+    setShowServiceDropdown(false);
     setShowForm(true);
   };
 
@@ -73,6 +102,9 @@ export default function CalendarPage() {
     setForm({ client_name: a.client_name, client_phone: a.client_phone || "", service_id: a.service_id?.toString() || "", date: a.date, time: a.time, notes: a.notes || "", client_id: a.client_id?.toString() || "" });
     setClientSearch("");
     setShowClientDropdown(false);
+    const svc = services.find(s => s.id === a.service_id);
+    setServiceSearch(svc ? svc.name : "");
+    setShowServiceDropdown(false);
     setShowForm(true);
   };
 
@@ -320,35 +352,71 @@ export default function CalendarPage() {
               {/* Service section */}
               <div className="space-y-3.5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25">Servicio</p>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-white/40">Seleccionar servicio</label>
-                  <select value={form.service_id} onChange={e => setForm({ ...form, service_id: e.target.value })}
-                    className="glass-input w-full px-4 py-2.5 text-sm [&>option]:bg-neutral-900 [&>option]:text-white">
-                    <option value="">Sin servicio</option>
-                    {services.map(s => <option key={s.id} value={s.id}>{s.name} — ${s.price}</option>)}
-                  </select>
+                <div className="relative">
+                  <label className="mb-1.5 block text-xs font-medium text-white/40">Buscar servicio</label>
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/20" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                    <input
+                      value={serviceSearch}
+                      onChange={(e) => { setServiceSearch(e.target.value); setShowServiceDropdown(true); }}
+                      onFocus={() => setShowServiceDropdown(true)}
+                      className="glass-input w-full pl-10 pr-10 py-2.5 text-sm"
+                      placeholder="Buscar servicio..."
+                    />
+                    {form.service_id && (
+                      <button onClick={() => { setForm({ ...form, service_id: "" }); setServiceSearch(""); }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                  {showServiceDropdown && (
+                    <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-xl border border-white/[0.08] bg-neutral-900/95 backdrop-blur-xl shadow-lg">
+                      {services.filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase())).map(s => (
+                        <button key={s.id} onClick={() => {
+                          setForm({ ...form, service_id: s.id.toString() });
+                          setServiceSearch(s.name);
+                          setShowServiceDropdown(false);
+                        }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] transition flex items-center justify-between">
+                          <span className="font-medium text-white/90">{s.name}</span>
+                          <span className="text-xs text-white/30">${s.price} · {s.duration}min</span>
+                        </button>
+                      ))}
+                      {services.filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
+                        <p className="px-4 py-2.5 text-xs text-white/20">Sin resultados</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Date & Time section */}
               <div className="space-y-3.5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25">Fecha y hora</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-white/40">Fecha <span className="text-primary-400/60">*</span></label>
-                    <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
-                      className="glass-input w-full px-4 py-2.5 text-sm [color-scheme:dark]" />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-white/40">Hora <span className="text-primary-400/60">*</span></label>
-                    <select value={form.time} onChange={e => setForm({ ...form, time: e.target.value })}
-                      className="glass-input w-full px-4 py-2.5 text-sm [&>option]:bg-neutral-900 [&>option]:text-white">
-                      {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-                      {["08:30", "09:30", "10:30", "11:30", "12:30", "13:30", "14:30", "15:30", "16:30", "17:30", "18:30", "19:30", "20:30"].map(h => (
-                        <option key={h} value={h}>{h}</option>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/40">Fecha <span className="text-primary-400/60">*</span></label>
+                  <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
+                    className="glass-input w-full px-4 py-2.5 text-sm [color-scheme:dark]" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/40">Hora <span className="text-primary-400/60">*</span></label>
+                  {availableTimes.length === 0 ? (
+                    <p className="text-xs text-white/30 py-2">No hay horarios disponibles para hoy</p>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-1.5 mt-2">
+                      {availableTimes.map(t => (
+                        <button key={t} type="button" onClick={() => setForm({ ...form, time: t })}
+                          className={`rounded-lg py-2 text-xs font-medium transition-all
+                            ${form.time === t
+                              ? "bg-primary-500/20 text-primary-300 ring-1 ring-primary-500/30"
+                              : "bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/70"
+                            }`}>
+                          {formatTime12(t)}
+                        </button>
                       ))}
-                    </select>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

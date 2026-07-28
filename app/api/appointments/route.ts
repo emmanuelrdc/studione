@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { isNonEmptyString, isValidDate, isValidTime, sanitizeString } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const session = auth as JWTPayload;
 
   try {
     const body = await request.json();
@@ -53,6 +55,15 @@ export async function POST(request: NextRequest) {
     const result = db.prepare(
       "INSERT INTO appointments (client_name, client_phone, service_id, service_name, date, time, end_time, notes, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(safeName, safePhone, service_id || null, service_name || null, date, time, end_time || null, safeNotes, client_id || null);
+
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "appointment.create",
+      entityType: "appointment",
+      entityId: Number(result.lastInsertRowid),
+      details: { date, time, service_id: service_id || null },
+      ...auditContext(request),
+    });
 
     return NextResponse.json({ id: result.lastInsertRowid, ...body }, { status: 201 });
   } catch (error) {

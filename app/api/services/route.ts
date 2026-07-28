@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { isNonEmptyString, isNonNegativeNumber, isPositiveNumber, sanitizeString } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -35,7 +36,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   try {
@@ -76,6 +78,15 @@ export async function POST(request: NextRequest) {
     });
 
     const serviceId = createService();
+
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "service.create",
+      entityType: "service",
+      entityId: Number(serviceId),
+      details: { name: safeName, price },
+      ...auditContext(request),
+    });
 
     return NextResponse.json({ id: serviceId, ...body }, { status: 201 });
   } catch (error) {

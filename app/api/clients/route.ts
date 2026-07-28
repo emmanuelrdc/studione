@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { isNonEmptyString, sanitizeString } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -35,7 +36,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   try {
@@ -55,6 +57,14 @@ export async function POST(request: NextRequest) {
     ).run(safeName, safePhone, safeBirthDate);
 
     const client = db.prepare("SELECT * FROM clients WHERE id = ?").get(result.lastInsertRowid);
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "client.create",
+      entityType: "client",
+      entityId: Number(result.lastInsertRowid),
+      details: { name: safeName },
+      ...auditContext(request),
+    });
     return NextResponse.json(client, { status: 201 });
   } catch (error) {
     console.error("POST /api/clients error:", error);

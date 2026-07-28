@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -9,6 +10,9 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState<{ role: string; name: string } | null>(null);
+  const pathname = usePathname();
+  const isHome = pathname === "/";
+  const anchor = (hash: string) => isHome ? hash : `/${hash}`;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -24,27 +28,30 @@ export default function Navbar() {
   }, []);
 
   const navLinks = [
-    { href: "#inicio", label: "Inicio" },
-    { href: "#nosotros", label: "Nosotros" },
-    { href: "#servicios", label: "Servicios" },
-    { href: "#galeria", label: "Galería" },
+    { href: anchor("#inicio"), label: "Inicio" },
+    { href: anchor("#nosotros"), label: "Nosotros" },
+    { href: "/servicios", label: "Servicios" },
+    { href: anchor("#galeria"), label: "Galería" },
   ];
+
+  // On non-home pages, always use the light style (dark text) since there's no dark hero
+  const useLight = scrolled || !isHome;
 
   return (
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className={`fixed top-0 z-50 w-full transition-all duration-500 ${
-        scrolled
-          ? "bg-white/80 shadow-[0_1px_0_rgba(0,0,0,0.06)] backdrop-blur-xl"
+        useLight
+          ? "bg-white/90 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-2xl"
           : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-6xl px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="#inicio" className="flex items-center gap-2.5 group">
+          <Link href={isHome ? "#inicio" : "/"} className="flex items-center gap-2.5 group">
             <div className="relative h-9 w-9 overflow-hidden rounded-lg">
               <Image
                 src="/logo.jpg"
@@ -53,10 +60,10 @@ export default function Navbar() {
                 className="object-cover transition-transform duration-300 group-hover:scale-110"
               />
             </div>
-            <span className={`text-sm font-semibold tracking-wide transition-colors duration-300 ${
-              scrolled ? "text-neutral-900" : "text-white"
+            <span className={`text-[11px] font-medium tracking-[0.15em] uppercase transition-colors duration-300 ${
+              useLight ? "text-neutral-900" : "text-white"
             }`}>
-              STUDIO ONE
+              Studio One
             </span>
           </Link>
 
@@ -66,18 +73,18 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all duration-300 hover:bg-black/5 ${
-                  scrolled ? "text-neutral-600 hover:text-neutral-900" : "text-white/80 hover:text-white hover:bg-white/10"
+                className={`rounded-full px-4 py-1.5 text-[11px] font-medium tracking-wide transition-all duration-300 ${
+                  useLight ? "text-neutral-500 hover:text-neutral-900" : "text-white/60 hover:text-white"
                 }`}
               >
                 {link.label}
               </Link>
             ))}
             <Link
-              href="#contacto"
-              className={`ml-2 rounded-full px-5 py-1.5 text-xs font-medium transition-all duration-300 ${
-                scrolled
-                  ? "bg-primary-600 text-white hover:bg-primary-700"
+              href={anchor("#contacto")}
+              className={`ml-3 rounded-full px-5 py-1.5 text-[11px] font-medium tracking-wide transition-all duration-300 ${
+                useLight
+                  ? "bg-neutral-900 text-white hover:bg-neutral-800"
                   : "bg-white text-neutral-900 hover:bg-white/90"
               }`}
             >
@@ -85,10 +92,10 @@ export default function Navbar() {
             </Link>
             <Link
               href={user ? "/admin" : "/login"}
-              className={`ml-1 rounded-full px-5 py-1.5 text-xs font-medium transition-all duration-300 border ${
-                scrolled
-                  ? "border-neutral-300 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-                  : "border-white/30 text-white/80 hover:bg-white/10 hover:text-white"
+              className={`ml-1 rounded-full px-4 py-1.5 text-[11px] font-medium tracking-wide transition-all duration-300 border ${
+                useLight
+                  ? "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:text-neutral-900"
+                  : "border-white/20 text-white/60 hover:border-white/40 hover:text-white"
               }`}
             >
               {user ? (
@@ -116,19 +123,19 @@ export default function Navbar() {
                 className={`h-[1.5px] w-5 transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${
                   isOpen
                     ? "translate-y-[6.5px] rotate-45 bg-white"
-                    : scrolled ? "bg-neutral-800" : "bg-white"
+                    : useLight ? "bg-neutral-800" : "bg-white"
                 }`}
               />
               <span
                 className={`h-[1.5px] w-5 transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${
-                  isOpen ? "opacity-0" : scrolled ? "bg-neutral-800" : "bg-white"
+                  isOpen ? "opacity-0" : useLight ? "bg-neutral-800" : "bg-white"
                 }`}
               />
               <span
                 className={`h-[1.5px] w-5 transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${
                   isOpen
                     ? "-translate-y-[6.5px] -rotate-45 bg-white"
-                    : scrolled ? "bg-neutral-800" : "bg-white"
+                    : useLight ? "bg-neutral-800" : "bg-white"
                 }`}
               />
             </div>
@@ -147,7 +154,7 @@ export default function Navbar() {
             className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-neutral-900/95 backdrop-blur-xl md:hidden"
           >
             <nav className="flex flex-col items-center gap-2">
-              {[...navLinks, { href: "#contacto", label: "Contacto" }].map((link, i) => (
+              {[...navLinks, { href: anchor("#contacto"), label: "Contacto" }].map((link, i) => (
                 <motion.div
                   key={link.href}
                   initial={{ opacity: 0, y: 20 }}

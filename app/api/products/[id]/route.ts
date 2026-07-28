@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { checkAndCreateNotifications } from "@/lib/notifications";
-import { validateId, isPositiveNumber, sanitizeString } from "@/lib/validation";
+import { validateId, isPositiveNumber, isNonNegativeNumber, sanitizeString } from "@/lib/validation";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -21,7 +22,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   const { id: rawId } = await params;
@@ -56,21 +58,58 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       const updated = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as { id: number; name: string; stock_sales: number; stock_internal: number; product_type: string };
       checkAndCreateNotifications(updated);
+      writeAudit({
+        actor: actorFromSession(session),
+        action: "product.stock_transfer",
+        entityType: "product",
+        entityId: id,
+        details: { transfer_to, transfer_amount: amount },
+        ...auditContext(request),
+      });
       return NextResponse.json(updated);
     }
 
     const fields: string[] = [];
     const values: (string | number | null)[] = [];
 
-    if (name !== undefined) { fields.push("name = ?"); values.push(sanitizeString(name, 200)); }
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        return NextResponse.json({ error: "Nombre no puede estar vacío" }, { status: 400 });
+      }
+      fields.push("name = ?"); values.push(sanitizeString(name, 200));
+    }
     if (description !== undefined) { fields.push("description = ?"); values.push(sanitizeString(description, 2000)); }
-    if (brand_id !== undefined) { fields.push("brand_id = ?"); values.push(brand_id); }
-    if (stock_sales !== undefined) { fields.push("stock_sales = ?"); values.push(stock_sales); }
-    if (stock_internal !== undefined) { fields.push("stock_internal = ?"); values.push(stock_internal); }
-    if (price !== undefined) { fields.push("price = ?"); values.push(price); }
-    if (cost !== undefined) { fields.push("cost = ?"); values.push(cost); }
-    if (image !== undefined) { fields.push("image = ?"); values.push(image); }
-    if (category_id !== undefined) { fields.push("category_id = ?"); values.push(category_id); }
+    if (brand_id !== undefined) { fields.push("brand_id = ?"); values.push(brand_id || null); }
+    if (stock_sales !== undefined) {
+      const n = Math.floor(Number(stock_sales));
+      if (!Number.isInteger(n) || n < 0) {
+        return NextResponse.json({ error: "Stock ventas debe ser un entero >= 0" }, { status: 400 });
+      }
+      fields.push("stock_sales = ?"); values.push(n);
+    }
+    if (stock_internal !== undefined) {
+      const n = Math.floor(Number(stock_internal));
+      if (!Number.isInteger(n) || n < 0) {
+        return NextResponse.json({ error: "Stock interno debe ser un entero >= 0" }, { status: 400 });
+      }
+      fields.push("stock_internal = ?"); values.push(n);
+    }
+    if (price !== undefined) {
+      const n = Number(price);
+      if (!isNonNegativeNumber(n)) {
+        return NextResponse.json({ error: "Precio debe ser un número >= 0" }, { status: 400 });
+      }
+      fields.push("price = ?"); values.push(n);
+    }
+    if (cost !== undefined) {
+      const n = Number(cost);
+      if (!isNonNegativeNumber(n)) {
+        return NextResponse.json({ error: "Costo debe ser un número >= 0" }, { status: 400 });
+      }
+      fields.push("cost = ?"); values.push(n);
+    }
+    if (image !== undefined) { fields.push("image = ?"); values.push(image || null); }
+    if (category_id !== undefined) { fields.push("category_id = ?"); values.push(category_id || null); }
     if (active !== undefined) { fields.push("active = ?"); values.push(active); }
     if (body.product_type !== undefined) {
       const validTypes = ["sell", "internal", "both"];
@@ -82,11 +121,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (fields.length === 0) return NextResponse.json({ error: "No hay campos para actualizar" }, { status: 400 });
 
+    // Capture the prior price so the audit trail records the before/after on a price change.
+    const priceBefore = price !== undefined
+      ? (db.prepare("SELECT price FROM products WHERE id = ?").get(id) as { price: number } | undefined)?.price
+      : undefined;
+
     values.push(id);
     db.prepare(`UPDATE products SET ${fields.join(", ")} WHERE id = ?`).run(...values);
 
     const updated = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as { id: number; name: string; stock_sales: number; stock_internal: number; product_type: string };
     checkAndCreateNotifications(updated);
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "product.update",
+      entityType: "product",
+      entityId: id,
+      details: {
+        changed: fields.map((f) => f.split(" ")[0]),
+        ...(price !== undefined ? { price_before: priceBefore, price_after: Number(price) } : {}),
+      },
+      ...auditContext(request),
+    });
     return NextResponse.json(updated);
   } catch (error) {
     console.error("PUT /api/products/[id] error:", error);
@@ -94,10 +149,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   const { id: rawId } = await params;
@@ -106,5 +162,12 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   const db = getDb();
   db.prepare("UPDATE products SET active = 0 WHERE id = ?").run(id);
+  writeAudit({
+    actor: actorFromSession(session),
+    action: "product.delete",
+    entityType: "product",
+    entityId: id,
+    ...auditContext(request),
+  });
   return NextResponse.json({ success: true });
 }

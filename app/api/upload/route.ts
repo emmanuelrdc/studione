@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
@@ -62,6 +63,14 @@ export async function POST(request: NextRequest) {
     await writeFile(filePath, buffer);
 
     const url = `/uploads/${safeName}`;
+
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "upload.create",
+      entityType: "upload",
+      details: { url, mime: file.type, size: file.size },
+      ...auditContext(request),
+    });
 
     return NextResponse.json({ url });
   } catch {

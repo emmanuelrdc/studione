@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, requireRole, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { isNonEmptyString, sanitizeString } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -26,7 +27,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as JWTPayload, ["admin"]);
+  const session = auth as JWTPayload;
+  const roleCheck = requireRole(session, ["admin"]);
   if (roleCheck) return roleCheck;
 
   try {
@@ -40,6 +42,14 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     const safeName = sanitizeString(name, 200);
     const result = db.prepare("INSERT INTO categories (name, type, parent_id) VALUES (?, ?, ?)").run(safeName, type, parent_id || null);
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "category.create",
+      entityType: "category",
+      entityId: Number(result.lastInsertRowid),
+      details: { name: safeName, type },
+      ...auditContext(request),
+    });
     return NextResponse.json({ id: result.lastInsertRowid, name: safeName, type, parent_id }, { status: 201 });
   } catch (error) {
     console.error("POST /api/categories error:", error);

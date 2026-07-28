@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, type JWTPayload } from "@/lib/auth";
+import { writeAudit, actorFromSession, auditContext } from "@/lib/audit";
 import { validateId } from "@/lib/validation";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const session = auth as JWTPayload;
 
   const { id: rawId } = await params;
   const id = validateId(rawId);
@@ -27,6 +29,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (fields.length === 0) return NextResponse.json({ error: "No hay campos" }, { status: 400 });
     values.push(id);
     db.prepare(`UPDATE appointments SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+    writeAudit({
+      actor: actorFromSession(session),
+      action: "appointment.update",
+      entityType: "appointment",
+      entityId: id,
+      details: { changed: fields.map((f) => f.split(" ")[0]) },
+      ...auditContext(request),
+    });
     const updated = db.prepare("SELECT * FROM appointments WHERE id = ?").get(id);
     return NextResponse.json(updated);
   } catch (error) {
@@ -35,9 +45,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const session = auth as JWTPayload;
 
   const { id: rawId } = await params;
   const id = validateId(rawId);
@@ -45,5 +56,12 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   const db = getDb();
   db.prepare("DELETE FROM appointments WHERE id = ?").run(id);
+  writeAudit({
+    actor: actorFromSession(session),
+    action: "appointment.delete",
+    entityType: "appointment",
+    entityId: id,
+    ...auditContext(request),
+  });
   return NextResponse.json({ success: true });
 }

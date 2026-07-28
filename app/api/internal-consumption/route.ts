@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth, type JWTPayload } from "@/lib/auth";
+import { writeAuditTx, actorFromSession, auditContext } from "@/lib/audit";
 import { checkAndCreateNotifications } from "@/lib/notifications";
 import { isPositiveNumber } from "@/lib/validation";
 
@@ -42,6 +43,15 @@ export async function POST(request: NextRequest) {
 
       const updated = db.prepare("SELECT * FROM products WHERE id = ?").get(product_id) as { id: number; name: string; stock_sales: number; stock_internal: number };
       checkAndCreateNotifications(updated);
+
+      writeAuditTx(db, {
+        actor: actorFromSession(session),
+        action: "internal_consumption.create",
+        entityType: "internal_consumption",
+        entityId: Number(result.lastInsertRowid),
+        details: { product_id, quantity },
+        ...auditContext(request),
+      });
 
       return result.lastInsertRowid;
     });
