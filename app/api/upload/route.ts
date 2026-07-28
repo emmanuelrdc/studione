@@ -5,7 +5,12 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+// En Railway, UPLOADS_DIR debe apuntar dentro del Volume montado (ej. /data/uploads)
+// para que las imágenes subidas persistan entre redeploys. En local/dev, sin la env var
+// definida, se usa public/uploads (comportamiento actual, servido por Next.js).
+// La URL pública (/uploads/xxx.jpg) no cambia: cuando UPLOADS_DIR queda fuera de
+// public/, esa URL la sirve app/uploads/[...path]/route.ts leyendo del disco.
+const UPLOAD_DIR = process.env.UPLOADS_DIR || path.join(process.cwd(), "public", "uploads");
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",

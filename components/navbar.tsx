@@ -90,26 +90,21 @@ export default function Navbar() {
             >
               Contacto
             </Link>
-            <Link
-              href={user ? "/admin" : "/login"}
-              className={`ml-1 rounded-full px-4 py-1.5 text-[11px] font-medium tracking-wide transition-all duration-300 border ${
-                useLight
-                  ? "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:text-neutral-900"
-                  : "border-white/20 text-white/60 hover:border-white/40 hover:text-white"
-              }`}
-            >
-              {user ? (
+            {user && (
+              <Link
+                href="/admin"
+                className={`ml-1 rounded-full px-4 py-1.5 text-[11px] font-medium tracking-wide transition-all duration-300 border ${
+                  useLight
+                    ? "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:text-neutral-900"
+                    : "border-white/20 text-white/60 hover:border-white/40 hover:text-white"
+                }`}
+              >
                 <span className="inline-flex items-center gap-1.5">
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   Panel Admin
                 </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  Login
-                </span>
-              )}
-            </Link>
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -171,30 +166,23 @@ export default function Navbar() {
                   </Link>
                 </motion.div>
               ))}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ delay: 0.4, duration: 0.3 }}
-              >
-                <Link
-                  href={user ? "/admin" : "/login"}
-                  onClick={() => setIsOpen(false)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-lg font-light text-white backdrop-blur-sm transition-all hover:bg-white/20"
+              {user && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ delay: 0.4, duration: 0.3 }}
                 >
-                  {user ? (
-                    <>
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      Panel Admin
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                      Login
-                    </>
-                  )}
-                </Link>
-              </motion.div>
+                  <Link
+                    href="/admin"
+                    onClick={() => setIsOpen(false)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-lg font-light text-white backdrop-blur-sm transition-all hover:bg-white/20"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    Panel Admin
+                  </Link>
+                </motion.div>
+              )}
             </nav>
           </motion.div>
         )}

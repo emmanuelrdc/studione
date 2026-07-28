@@ -4,8 +4,39 @@ import { signToken } from "@/lib/auth";
 import { writeAudit, auditContext } from "@/lib/audit";
 import bcryptjs from "bcryptjs";
 
+// Simple in-memory rate limit: max 5 failed login attempts per IP per 15 minutes
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+
+function isRateLimited(ip: string): boolean {
+  const entry = rateLimitMap.get(ip);
+  if (!entry || Date.now() > entry.resetAt) return false;
+  return entry.count >= RATE_LIMIT;
+}
+
+// Only called on failed attempts — successful logins never count toward the limit
+function registerFailedAttempt(ip: string): void {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return;
+  }
+  entry.count++;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
+    if (isRateLimited(ip)) {
+      return NextResponse.json(
+        { error: "Demasiados intentos. Intenta de nuevo en unos minutos." },
+        { status: 429 }
+      );
+    }
+
     const { email, password } = await request.json();
 
     if (!email || !password) {
@@ -20,12 +51,14 @@ export async function POST(request: NextRequest) {
     } | undefined;
 
     if (!user) {
+      registerFailedAttempt(ip);
       writeAudit({ actor: null, action: "auth.login_failed", status: "denied", details: { email: attemptedEmail }, ...auditContext(request) });
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
     }
 
     const validPassword = bcryptjs.compareSync(password, user.password);
     if (!validPassword) {
+      registerFailedAttempt(ip);
       writeAudit({ actor: null, action: "auth.login_failed", status: "denied", entityType: "user", entityId: user.id, details: { email: attemptedEmail }, ...auditContext(request) });
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
     }
